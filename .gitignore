@@ -1,0 +1,11 @@
+# Ne jamais publier de secrets
+passwords.txt
+*.secret
+*.key
+*.pem
+*credentials*
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+*~

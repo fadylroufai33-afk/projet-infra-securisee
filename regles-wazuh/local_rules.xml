@@ -1,0 +1,57 @@
+<!--
+  local_rules.xml — Règles de détection personnalisées NOVATECH
+  SIEM : Wazuh 4.14 · Source : journaux Windows (eventchannel) + Sysmon
+  Cartographie : MITRE ATT&CK
+  Emplacement sur le serveur : /var/ossec/etc/rules/local_rules.xml
+-->
+
+<group name="windows,novatech,active_directory,">
+
+  <!-- 100100 — Echec de pre-authentification Kerberos (mauvais mot de passe)
+       Evenement Windows 4771, code d'echec 0x18 (mauvais mot de passe).
+       MITRE T1110 (Brute Force). -->
+  <rule id="100100" level="5">
+    <if_sid>60104</if_sid>
+    <field name="win.system.eventID">^4771$</field>
+    <field name="win.eventdata.status">^0x18$</field>
+    <description>Kerberos : mauvais mot de passe pour $(win.eventdata.targetUserName) depuis $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <!-- 100101 — Password spraying via Kerberos
+       Au moins 5 echecs 100100 en 300 s, depuis une meme IP source
+       mais visant des comptes differents : signature d'un spraying.
+       MITRE T1110.003 (Password Spraying). -->
+  <rule id="100101" level="12" frequency="5" timeframe="300">
+    <if_matched_sid>100100</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <not_same_field>win.eventdata.targetUserName</not_same_field>
+    <description>Password spraying probable (Kerberos) : plusieurs comptes vises depuis $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1110.003</id></mitre>
+  </rule>
+
+  <!-- 100102 — Password spraying via ouverture de session (NTLM / SMB)
+       Meme logique que 100101, mais sur les echecs d'ouverture de session.
+       MITRE T1110.003 (Password Spraying). -->
+  <rule id="100102" level="12" frequency="5" timeframe="300">
+    <if_matched_sid>60122</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <not_same_field>win.eventdata.targetUserName</not_same_field>
+    <description>Password spraying probable : plusieurs comptes vises depuis $(win.eventdata.ipAddress)</description>
+    <mitre><id>T1110.003</id></mitre>
+  </rule>
+
+  <!-- 100110 — Kerberoasting : ticket de service demande en RC4
+       Evenement 4769 avec chiffrement 0x17 (RC4), hors comptes machine ($)
+       et hors krbtgt : demande de ticket de service cassable hors ligne.
+       MITRE T1558.003 (Kerberoasting). -->
+  <rule id="100110" level="12">
+    <if_sid>60103</if_sid>
+    <field name="win.system.eventID">^4769$</field>
+    <field name="win.eventdata.ticketEncryptionType">^0x17$</field>
+    <field name="win.eventdata.serviceName" type="pcre2" negate="yes">\$$|^krbtgt$</field>
+    <description>Kerberoasting probable : ticket RC4 demande pour $(win.eventdata.serviceName) par $(win.eventdata.targetUserName)</description>
+    <mitre><id>T1558.003</id></mitre>
+  </rule>
+
+</group>
